@@ -22,19 +22,20 @@ if __name__ == "__main__":
         
         exam_is_full = neptun_driver.check_if_full()
         
-        while exam_is_full:
+        while exam_is_full or not config.STOP_IF_NOT_FULL:
             print(f"Retrying in {config.RETRY_EVERY} seconds...")
             sleep(config.RETRY_EVERY)
             
             driver.refresh()
             
-            print()
             tries += 1
-            print(f"Try #{tries}")
+            print(f"\nTry #{tries}")
             
             exam_is_full = neptun_driver.check_if_full()
     except KeyboardInterrupt:
         print("Bye-bye")
+    except Exception as e:
+        print(str(e))
     finally:
         import sys
         driver.quit()

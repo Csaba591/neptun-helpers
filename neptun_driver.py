@@ -1,5 +1,5 @@
 import functools
-from typing import List
+from typing import List, Tuple
 from urllib.parse import urljoin
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.common.by import By
@@ -79,15 +79,21 @@ class NeptunDriver:
         raise ValueError(f"No exam found with date '{exam_date}'.")
 
     @_ensure_logged_in
-    def find_exam_capacity_text(self, exam_tr: WebElement) -> str:
+    def find_exam_capacity(self, exam_tr: WebElement) -> Tuple[int, int]:
         exam_tr_tds: List[WebElement] = exam_tr.find_elements(by=By.TAG_NAME, value="td")
         exam_tr_texts = [td.text.strip() for td in exam_tr_tds if td.text.strip()]
         
         print(f"Looking at row: [{' | '.join(exam_tr_texts)}]")
         capacity_texts = [text for text in exam_tr_texts if "/" in text]
-        assert len(capacity_texts) == 1, f"Error, found multiple capacity texts: {', '.join(capacity_texts)}"
         
-        return capacity_texts[0]
+        for candidate in capacity_texts:
+            left, right = candidate.split("/", 1)
+            try:
+                return int(left), int(right)
+            except ValueError as e:
+                continue
+        
+        raise ValueError(f"Could not find exam capacity in: {' | '.join(exam_tr_texts)}")
 
     @_ensure_logged_in
     def go_to_exam_signup_page(self):
@@ -97,26 +103,27 @@ class NeptunDriver:
 
     @_ensure_logged_in
     def check_if_full(self) -> bool:
-        print("check_if_full")
         self.apply_course_filter(config.COURSE_NAME)
         
         exams_table = self.driver.find_element(by=By.ID, value="h_exams_gridExamList_bodytable")
         exams_table_tbody: WebElement = exams_table.find_element(by=By.TAG_NAME, value="tbody")
         
         exams_table_rows = exams_table_tbody.find_elements(by=By.TAG_NAME, value="tr")
-        print(f"Found {len(exams_table_rows)} exam dates.")
+        if exams_table_rows:
+            print(f"Found {len(exams_table_rows)} exam dates.")
+        else:
+            raise Exception("Error: no exam dates found! Please ensure the config.py is right and then try again.")
 
-        exam_tr = self.find_exam_row_by_date(exams_table_rows, config.EXAM_DATE)
-        capacity_text = self.find_exam_capacity_text(exam_tr)
-
-        current, capacity = capacity_text.split("/")
-        current = int(current)
-        capacity = int(capacity)
+        try:
+            exam_tr = self.find_exam_row_by_date(exams_table_rows, config.EXAM_DATE)
+            current, capacity = self.find_exam_capacity(exam_tr)
+        except ValueError as e:
+            print(str(e))
 
         if current == capacity:
-            print(f"Exam is full :( --- {capacity_text}")
+            print(f"Exam is full :( --- {current} / {capacity}")
         else:
-            print(f":) --- {capacity_text}")
+            print(f":) --- {current} / {capacity}")
             
         return current == capacity
     
